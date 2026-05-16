@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Text2SQL — обзор проекта</title>
+<style>
+  :root {
+    --bg: #0f1419;
+    --panel: #161b22;
+    --panel-2: #1f2630;
+    --border: #2d333b;
+    --text: #d6deeb;
+    --muted: #8b949e;
+    --accent: #79b8ff;
+    --accent-2: #b392f0;
+    --green: #56d364;
+    --orange: #f0883e;
+    --red: #f85149;
+    --code: #e6edf3;
+    --code-bg: #0d1117;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 32px 24px 80px; }
+  h1 {
+    font-size: 28px;
+    margin: 0 0 4px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  h2 {
+    font-size: 20px;
+    margin: 36px 0 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 { font-size: 15px; margin: 0 0 4px; color: var(--text); }
+  .lede { color: var(--muted); margin: 0 0 8px; font-size: 14px; }
+
+  .pipeline {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin: 16px 0;
+  }
+  .step {
+    display: grid;
+    grid-template-columns: 60px 1fr;
+    gap: 16px;
+    align-items: stretch;
+  }
+  .step-num {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .step-num .circle {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+  .step-num .line {
+    flex: 1;
+    width: 2px;
+    background: var(--border);
+    margin-top: 4px;
+  }
+  .step:last-child .line { display: none; }
+  .step-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.02) inset;
+  }
+  .step-card .meta {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 6px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  .step-card p { margin: 6px 0; font-size: 14px; }
+  .step-card ul { margin: 6px 0; padding-left: 22px; font-size: 14px; }
+  .step-card ul li { margin: 2px 0; }
+
+  .badge {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .b-write { background: rgba(86,211,100,0.15); color: var(--green); }
+  .b-read  { background: rgba(121,184,255,0.15); color: var(--accent); }
+  .b-llm   { background: rgba(179,146,240,0.18); color: var(--accent-2); }
+  .b-net   { background: rgba(240,136,62,0.15); color: var(--orange); }
+  .b-cpu   { background: rgba(214,222,235,0.10); color: var(--muted); }
+
+  code, .mono {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 13px;
+    color: var(--code);
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    overflow-x: auto;
+    font-size: 12.5px;
+    line-height: 1.45;
+    margin: 8px 0;
+  }
+  pre code { background: none; padding: 0; }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 8px 0 24px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .summary {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin: 12px 0 24px;
+  }
+  .summary table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  .summary th, .summary td {
+    text-align: left;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .summary th { color: var(--muted); font-weight: 500; white-space: nowrap; }
+  .summary tr:last-child td { border-bottom: none; }
+
+  .grid2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 720px) { .grid2 { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .card h3 { margin-bottom: 6px; }
+  .card p, .card ul { font-size: 14px; }
+  .card ul { margin: 6px 0; padding-left: 20px; }
+
+  .tag {
+    display: inline-block;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0 6px;
+    margin: 0 4px 4px 0;
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+
+  .num {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .num.good { color: var(--green); }
+
+  details { margin-top: 8px; font-size: 13px; }
+  details summary { cursor: pointer; color: var(--accent); user-select: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Text2SQL — обзор проекта</h1>
+<p class="lede">Сервис перевода вопросов на естественном языке в SQL-запросы. Пользователь
+спрашивает о своей базе данных обычными словами — Text2SQL находит нужные таблицы,
+генерирует безопасный read-only SQL-запрос, выполняет его и возвращает и
+результат, и ответ на естественном языке.</p>
+
+<div class="legend">
+  <span class="badge b-net">HTTP / WS</span>
+  <span class="badge b-read">чтение БД</span>
+  <span class="badge b-write">запись БД</span>
+  <span class="badge b-llm">вызов LLM</span>
+  <span class="badge b-cpu">локальные вычисления</span>
+</div>
+
+<div class="summary">
+  <table>
+    <tr><th>Что это</th><td>Конвейер Natural Language → SQL поверх PostgreSQL, с веб-интерфейсом чата</td></tr>
+    <tr><th>Backend</th><td>Python 3.13+ · Litestar · LangGraph / LangChain · async SQLAlchemy</td></tr>
+    <tr><th>Хранилище эмбеддингов</th><td>PostgreSQL + расширение <code>pgvector</code> (поиск по сходству описаний таблиц)</td></tr>
+    <tr><th>Frontend</th><td>React 18 · Vite · Zustand · React Query · Tailwind</td></tr>
+    <tr><th>LLM-провайдеры</th><td>OCI Generative AI · OpenAI · Anthropic · Google (Gemini) · Ollama</td></tr>
+    <tr><th>Модель эмбеддингов</th><td><code>all-MiniLM-L6-v2</code> · 384 измерения · работает локально на CPU</td></tr>
+    <tr><th>Менеджер пакетов</th><td><code>uv</code> (обязательно, не pip)</td></tr>
+  </table>
+</div>
+
+<p class="lede">Подробный пошаговый разбор внутреннего конвейера (с привязкой к строкам кода)
+см. в <code>pipeline.html</code>. Инструкция по запуску — в <code>SETUP.md</code>.
+Этот файл — высокоуровневый обзор всего проекта.</p>
+
+
+<h2>Архитектура</h2>
+
+<div class="grid2">
+  <div class="card">
+    <h3>Backend (API-слой)</h3>
+    <p>Асинхронный сервис на <b>Litestar</b>, порт 8001. Основные эндпоинты:</p>
+    <ul>
+      <li><code>POST /api/messages</code> — обработка сообщений чата (NL→SQL)</li>
+      <li><code>POST /api/sql</code> — прямое выполнение SQL</li>
+      <li><code>/api/connections</code> — управление подключениями к БД</li>
+      <li><code>/api/schema</code> — просмотр схемы, активация подключения</li>
+      <li>WebSocket — уведомления (например, после сканирования таблиц)</li>
+      <li><code>GET /health</code>, OpenAPI-документация на <code>/docs</code></li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>Конвейер агента (LangGraph)</h3>
+    <p>Логика NL→SQL построена как граф LangGraph с тремя инструментами:</p>
+    <ul>
+      <li><code>generate_sql_query</code> — новый вопрос, требующий SQL</li>
+      <li><code>show_table</code> — быстрый предпросмотр строк таблицы</li>
+      <li><code>follow_up</code> — уточнение/модификация предыдущего запроса</li>
+    </ul>
+    <p>LLM сам выбирает инструмент. Если вопрос вне домена — отвечает текстом.</p>
+  </div>
+  <div class="card">
+    <h3>Frontend</h3>
+    <p>SPA на React 18 + Vite. Чат-интерфейс, браузер схемы БД, управление
+    подключениями, реплей запросов. Состояние — Zustand, серверные данные —
+    React Query, стили — Tailwind. Связь с backend по HTTP и WebSocket.</p>
+  </div>
+  <div class="card">
+    <h3>Универсальный LLM-слой</h3>
+    <p>Единый интерфейс <code>BaseLLMProvider</code> поверх пяти провайдеров.
+    Выбор — через переменную окружения <code>LLM_PROVIDER</code>. Новый
+    провайдер добавляется реализацией одного класса и регистрацией в фабрике
+    (<code>src/llm/factory.py</code>).</p>
+  </div>
+</div>
+
+
+<h2>Структура репозитория</h2>
+
+<div class="summary">
+  <table>
+    <tr><th><code>src/api/</code></th><td>HTTP/WS-эндпоинты: health, messages, sql, schema, websocket, mock</td></tr>
+    <tr><th><code>src/agents/</code></th><td>Агент LangGraph, состояния графа, анализ связей и колонок таблиц</td></tr>
+    <tr><th><code>src/agents/tools/</code></th><td>Инструменты конвейера: поиск таблиц, генерация SQL, исполнение, валидация, само-коррекция, Q-SQL-ретривер</td></tr>
+    <tr><th><code>src/services/</code></th><td>Сервисы: сканер БД, эмбеддинги, подключения, планировщик</td></tr>
+    <tr><th><code>src/llm/</code></th><td>Абстракция LLM: базовый интерфейс, фабрика, реализации провайдеров</td></tr>
+    <tr><th><code>src/common/</code></th><td>DTO (Pydantic), настройки, логирование, обработка ошибок, метаданные</td></tr>
+    <tr><th><code>frontend/</code></th><td>React-приложение (Vite)</td></tr>
+    <tr><th><code>bench/</code></th><td>Бенчмарк BIRD Mini-Dev: загрузчик, раннер, оценка качества</td></tr>
+  </table>
+</div>
+
+
+<h2>Конвейер 1 — Подключение и сканирование БД</h2>
+<p class="lede">Выполняется один раз, когда пользователь активирует подключение к базе.
+Цель — построить «карту» базы для последующего поиска.</p>
+
+<div class="pipeline">
+
+  <div class="step"><div class="step-num"><div class="circle">1</div><div class="line"></div></div>
+    <div class="step-card">
+      <h3><span class="badge b-net">HTTP</span> Активация подключения</h3>
+      <div class="meta">src/api/schema.py · src/services/connection_service.py</div>
+      <p>Пользователь отмечает подключение активным. Конфигурация подключения
+      (хост, порт, учётные данные) хранится в зашифрованном виде.</p>
+    </div>
+  </div>
+
+  <div class="step"><div class="step-num"><div class="circle">2</div><div class="line"></div></div>
+    <div class="step-card">
+      <h3><span class="badge b-read">чтение БД</span> Инвентаризация таблиц</h3>
+      <div class="meta">src/services/scanner_service.py</div>
+      <p>Запрос к <code>information_schema</code> собирает по каждой таблице: имя,
+      тип (таблица/представление), комментарий, список колонок с типами,
+      внешние ключи.</p>
+    </div>
+  </div>
+
+  <div class="step"><div class="step-num"><div class="circle">3</div><div class="line"></div></div>
+    <div class="step-card">
+      <h3><span class="badge b-read">чтение БД</span> Сбор допустимых значений колонок</h3>
+      <div class="meta">scanner_service — подсказки значений из трёх источников</div>
+      <p>Для колонок собираются допустимые значения и добавляются в описание
+      (например, <code>status: 'delivered', 'cancelled', …</code>) — это не даёт
+      модели выдумывать несуществующие литералы. Используются три источника:</p>
+      <ul>
+        <li><b>Нативные ENUM-типы Postgres</b> (<code>pg_enum</code>) — читаются
+        <i>целиком</i> из системного каталога, независимо от кардинальности;</li>
+        <li><b>CHECK-ограничения вида <code>col IN (…)</code></b>
+        (<code>pg_constraint</code>) — литералы извлекаются из определения
+        ограничения, тоже всегда;</li>
+        <li><b>Сэмплирование <code>SELECT DISTINCT</code></b> — запасной вариант
+        для «enum по соглашению» в обычных <code>varchar</code>-колонках;
+        включается только при достаточно низкой кардинальности.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="step"><div class="step-num"><div class="circle">4</div><div class="line"></div></div>
+    <div class="step-card">
+      <h3><span class="badge b-cpu">CPU</span> Генерация эмбеддингов</h3>
+      <div class="meta">src/services/embedding_service.py</div>
+      <p>Для каждой таблицы собирается текстовое описание и прогоняется через
+      <code>all-MiniLM-L6-v2</code> → вектор из 384 чисел. Модель загружается
+      один раз и работает локально на CPU — без обращений к внешним API.</p>
+    </div>
+  </div>
+
+  <div class="step"><div class="step-num"><div class="circle">5</div><div class="line"></div></div>
+    <div class="step-card">
+      <h3><span class="badge b-write">запись БД</span> Сохранение в pgvector</h3>
+      <div class="meta">src/common/metadata_db.py · embedding_service.py</div>
+      <p>Описания и эмбеддинги таблиц сохраняются в БД с расширением
+      <code>pgvector</code>, разделённые по <code>connection_id</code>.
+      Строится индекс для быстрого поиска по косинусному сходству.</p>
+    </div>
+  </div>
+
+</div>
+
+
+<h2>Конвейер 2 — Обработка вопроса пользователя</h2>
+<p class="lede">Через этот конвейер проходит каждое сообщение чата. К пользовательской
+БД обращается только исполнитель на шаге 6 — все ранние шаги работают с
+метаданными (эмбеддингами).</p>
+
+<div class="pipeline">
+
+  <div class="step"><div class="step-num"><div class="circle">1</div><div class="line"></div></div>
+    <div class="step-card">
+      <h3><span class="badge b-cpu">CPU</span><span class="badge b-read">чтение БД</span> Векторный поиск таблиц</h3>
+      <div class="meta">src/agents/tools/required_tables_searcher.py</div>
+      <p>Вопрос пользователя эмбеддится той же моделью MiniLM, затем pgvector
+      по косинусному расстоянию (<code>&lt;=&gt;</code>) находит наиболее
+      релевантные таблицы (по умолчанию топ-14).</p>
+    </div>
+  </div>
+
+  <div class="step"><div class="step-num"><div class="circle">2</div><div class="line"></div></div>
+    <div class="step-card">
+      <h3><span class="badge b-llm">LLM</span> Фильтрация таблиц по релевантности</h3>
+      <div class="meta">required_tables_searcher.py — _filter_relevant_tables</div>
+      <p>Описания найденных таблиц вместе с вопросом отправляются LLM: «какие из
+      них действительно нужны?». Модель возвращает сокращённый список.</p>
+    </div>
+  </div>
+
+  <div class="step"><div class="step-num"><div class="circle">3</div><div class="line"></div></div>
+    <div class="step-card">
+      <h3><span class="badge b-llm">LLM</span> Генерация SQL</h3>
+      <div class="meta">src/agents/tools/sql_creator.py</div>
+      <p>Системный промпт + блок схемы (колонки, типы, сэмплированные значения,
+      внешние ключи) + вопрос и подсказки. Модель возвращает
+      <code>{"sql_query": "…"}</code>. Guardrails отклоняют любой DDL/DML —
+      допускаются только <code>SELECT</code>.</p>
+      <details>
+        <summary>Опционально: Q-SQL-ретривер</summary>
+        <p>При включённом режиме <code>BENCH_QSQL</code> к промпту добавляются
+        похожие пары «вопрос → SQL» из обучающего набора BIRD
+        (<code>src/agents/tools/qsql_retriever.py</code>) — модель копирует
+        стилистические паттерны SQL по аналогии.</p>
+      </details>
+    </div>
+  </div>
+
+  <div class="step"><div class="step-num"><div class="circle">4</div><div class="line"></div></div>
+    <div class="step-card">
+      <h3><span class="badge b-cpu">CPU</span> Валидация колонок (sqlglot)</h3>
+      <div class="meta">src/agents/tools/column_validator.py</div>
+      <p>SQL парсится, каждая ссылка на колонку сверяется со схемой. При ошибках —
+      до 2 проходов исправления через LLM.</p>
+    </div>
+  </div>
+
+  <div class="step"><div class="step-num"><div class="circle">5</div><div class="line"></div></div>
+    <div class="step-card">
+      <h3><span class="badge b-llm">LLM</span> Контроллер условий</h3>
+      <div class="meta">src/agents/tools/controller.py</div>
+      <p>Второй проход LLM проверяет условия <code>WHERE</code>/<code>JOIN</code>
+      против вопроса. Если на вопрос нельзя ответить через <code>SELECT</code>
+      (например, «удали таблицу») — возвращается пустой запрос, и запрос
+      отклоняется.</p>
+    </div>
+  </div>
+
+  <div class="step"><div class="step-num"><div class="circle">6</div><div class="line"></div></div>
+    <div class="step-card">
+      <h3><span class="badge b-read">чтение БД</span> Выполнение с само-коррекцией</h3>
+      <div class="meta">src/agents/tools/sql_executor.py · sql_validator.py · init_tools.py</div>
+      <p>До 3 попыток. При ошибке БД LLM получает неудачный SQL, текст ошибки,
+      историю прошлых попыток и точечные подсказки (например, для ошибок
+      <code>GROUP BY</code> в Postgres) и генерирует исправленную версию.</p>
+    </div>
+  </div>
+
+  <div class="step"><div class="step-num"><div class="circle">7</div><div class="line"></div></div>
+    <div class="step-card">
+      <h3><span class="badge b-cpu">CPU</span><span class="badge b-llm">LLM</span> Ответ: текст + CSV</h3>
+      <div class="meta">src/agents/tools/df_to_text_converter.py</div>
+      <p>Результат сохраняется в CSV, строится предпросмотр первых строк, LLM
+      формулирует ответ на естественном языке. Пользователь получает и текст,
+      и ссылку на скачивание CSV.</p>
+    </div>
+  </div>
+
+</div>
+
+
+<h2>Поддерживаемые LLM-провайдеры</h2>
+<p class="lede">Выбор провайдера — переменная окружения <code>LLM_PROVIDER</code>.
+Все провайдеры реализуют единый интерфейс <code>BaseLLMProvider</code>.</p>
+
+<div class="summary">
+  <table>
+    <tr><th><code>oci</code></th><td>OCI Generative AI (Oracle Cloud) — <code>langchain-oci</code></td></tr>
+    <tr><th><code>openai</code></th><td>модели GPT — <code>langchain-openai</code></td></tr>
+    <tr><th><code>anthropic</code></th><td>модели Claude — <code>langchain-anthropic</code></td></tr>
+    <tr><th><code>google</code></th><td>модели Gemini — <code>langchain-google-genai</code></td></tr>
+    <tr><th><code>ollama</code></th><td>локальные модели — <code>langchain-ollama</code></td></tr>
+  </table>
+</div>
+
+
+<h2>Качество — бенчмарк BIRD Mini-Dev</h2>
+<p class="lede">Качество конвейера измеряется на BIRD Mini-Dev (500 вопросов, PostgreSQL)
+по официальной метрике Execution Accuracy (EX) — совпадает ли множество строк
+результата с эталоном. Тесты — на модели Gemini 2.5 Flash.</p>
+
+<div class="summary">
+  <table>
+    <tr>
+      <th>Этап</th>
+      <th>EX (точность исполнения)</th>
+      <th>Комментарий</th>
+    </tr>
+    <tr>
+      <td>Исходный конвейер</td>
+      <td><span class="num">39.4%</span></td>
+      <td>Стартовая точка</td>
+    </tr>
+    <tr>
+      <td>Голая модель (один вызов LLM)</td>
+      <td><span class="num">52.6%</span></td>
+      <td>Базовый ориентир — LLM со схемой, без конвейера</td>
+    </tr>
+    <tr>
+      <td>Wave 1 — упрощение промпта, структурированные подсказки</td>
+      <td><span class="num">54.0%</span></td>
+      <td>Отключён schema-aligner, чище рендеринг схемы</td>
+    </tr>
+    <tr>
+      <td>Wave 3 — Q-SQL-ретривер (примеры из BIRD train)</td>
+      <td><span class="num good">55.0%</span></td>
+      <td>Текущий результат — на 2.4 п.п. выше голой модели</td>
+    </tr>
+  </table>
+</div>
+<p class="lede">Итоговый прирост — <b>+15.6 п.п.</b> относительно исходного конвейера.
+Инструменты бенчмарка — в каталоге <code>bench/</code>.</p>
+
+
+<h2>Запуск проекта</h2>
+<p class="lede">Кратко (полная инструкция — в <code>SETUP.md</code>):</p>
+
+<pre><code># Backend
+uv sync                       # установить зависимости
+cp .env.example .env          # настроить окружение (LLM-провайдер, БД)
+uv run python run.py          # запустить сервис
+
+# Frontend
+cd frontend && npm install && npm run dev
+
+# Docker (тестовая БД PostgreSQL + pgvector)
+docker compose up -d</code></pre>
+
+<div class="summary">
+  <table>
+    <tr><th>Ключевые переменные</th><td>
+      <span class="tag">LLM_PROVIDER</span>
+      <span class="tag">MODEL_ID</span>
+      <span class="tag">USERNAME / PASSWORD</span>
+      <span class="tag">DB_HOST / DB_PORT / DATABASE</span>
+      <span class="tag">&lt;провайдер&gt;_API_KEY</span>
+    </td></tr>
+    <tr><th>Команды разработки</th><td>
+      <code>uv run pytest</code> · <code>uv run ruff check .</code> · <code>uv run pyright</code>
+    </td></tr>
+  </table>
+</div>
+
+</div>
+</body>
+</html>

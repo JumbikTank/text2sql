@@ -1,0 +1,73 @@
+services:
+    metadata-db:
+        image: pgvector/pgvector:pg16
+        container_name: text2sql-metadata-db
+        environment:
+            POSTGRES_DB: text2sql_metadata
+            POSTGRES_USER: text2sql
+            POSTGRES_PASSWORD: text2sql
+        ports:
+            - "5434:5432"
+        volumes:
+            - metadata-db-data:/var/lib/postgresql/data
+        networks:
+            - text2sql-network
+        restart: unless-stopped
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U text2sql -d text2sql_metadata"]
+            interval: 5s
+            timeout: 5s
+            retries: 10
+
+    api:
+        build:
+            context: .
+            dockerfile: Dockerfile
+            cache_from:
+                - ghcr.io/astral-sh/uv:0.5.20
+            args:
+                BUILDKIT_INLINE_CACHE: 1
+        image: text2sql-be:latest
+        container_name: text2sql-api
+        ports:
+            - "18001:8000"
+        env_file:
+            - .env
+        environment:
+            # Override critical container settings
+            - HOST=0.0.0.0
+            - PORT=8000
+            - METADATA_DB_HOST=metadata-db
+            - METADATA_DB_PORT=5432
+        volumes:
+            # For development: mount source code
+            - ./src:/app/src:ro
+            - ./tmp:/app/tmp
+        depends_on:
+            metadata-db:
+                condition: service_healthy
+        networks:
+            - text2sql-network
+        restart: unless-stopped
+        healthcheck:
+            test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 40s
+        deploy:
+            resources:
+                limits:
+                    cpus: "2"
+                    memory: 2G
+                reservations:
+                    cpus: "0.5"
+                    memory: 512M
+
+networks:
+    text2sql-network:
+        driver: bridge
+
+volumes:
+    db-data:
+    metadata-db-data:
