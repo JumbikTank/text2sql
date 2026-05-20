@@ -1,79 +1,80 @@
-# Text2SQL — Natural Language to SQL
+# Text2SQL — естественный язык в SQL
 
-Ask questions about your PostgreSQL database in plain English (or Russian); Text2SQL
-picks the relevant tables, generates a read-only SQL query, runs it, and returns
-both the result preview and a CSV you can download.
+Задавайте вопросы своей PostgreSQL-базе на обычном русском (или английском) —
+Text2SQL подбирает релевантные таблицы, генерирует SQL-запрос на чтение,
+выполняет его и возвращает как предпросмотр результата, так и CSV для скачивания.
 
-Stack:
-- **Backend** — Litestar + LangGraph + LangChain; PostgreSQL with pgvector for
-  table-description embeddings; async SQLAlchemy.
-- **Frontend** — React 18 + Vite + Zustand + React Query + Tailwind.
-- **LLM providers** — OCI Generative AI, OpenAI, Anthropic, or Ollama.
+Стек:
+- **Бэкенд** — Litestar + LangGraph + LangChain; PostgreSQL с pgvector для
+  эмбеддингов описаний таблиц; асинхронный SQLAlchemy.
+- **Фронтенд** — React 18 + Vite + Zustand + React Query + Tailwind.
+- **LLM-провайдеры** — OCI Generative AI, OpenAI, Anthropic, Google или Ollama.
 
-## Quickstart
+## Быстрый старт
 
-### Prerequisites
+### Требования
 
-- Python 3.13+ and [uv](https://github.com/astral-sh/uv)
+- Python 3.13+ и [uv](https://github.com/astral-sh/uv)
 - Node.js 18+
-- Docker (for the test Postgres) or an existing PostgreSQL 14+ with `pgvector`
+- Docker (для тестового Postgres) или уже установленный PostgreSQL 14+ с `pgvector`
 
-### 1. Start a Postgres with pgvector
+### 1. Поднять Postgres с pgvector
 
 ```bash
 docker compose -f docker-compose.test.yml up -d
 ```
 
-This gives you a Postgres at `localhost:5433` (db `testdb`, user `testuser`,
-password `testpass`) with the `vector` extension and a seeded sample schema.
+Поднимется Postgres на `localhost:5433` (база `testdb`, пользователь `testuser`,
+пароль `testpass`) с расширением `vector` и предзаполненной демо-схемой.
 
-Skip this step if you already have a Postgres you want to use.
+Этот шаг можно пропустить, если у вас уже есть PostgreSQL, к которому
+вы хотите подключиться.
 
-### 2. Configure `.env`
+### 2. Настроить `.env`
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` and set at minimum:
+Откройте `.env` и задайте как минимум следующее:
 
 ```env
-# Database
+# База данных
 USERNAME=testuser
 PASSWORD=testpass
 DB_HOST=localhost
 DB_PORT=5433
 DATABASE=testdb
 
-# LLM (pick one provider)
+# LLM (выберите одного провайдера)
 LLM_PROVIDER=openai
 MODEL_ID=gpt-4o-mini
 OPENAI_API_KEY=sk-...
 
-# App
+# Приложение
 PORT=18001
 HOST=127.0.0.1
 CSV_DOWNLOAD_BASE_URL=http://localhost:18001/files/csv
 
-# Required to encrypt saved connection credentials on disk.
-# Generate with:
+# Нужен для шифрования сохранённых credentials подключений на диске.
+# Сгенерировать ключ:
 #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-CREDENTIAL_ENCRYPTION_KEY=<paste-generated-fernet-key>
+CREDENTIAL_ENCRYPTION_KEY=<вставьте-сгенерированный-fernet-ключ>
 ```
 
-See the LLM provider sections below for OCI / Anthropic / Ollama options.
+Настройки для OCI / Anthropic / Google / Ollama — в разделе ниже.
 
-### 3. Install deps and start the backend
+### 3. Установить зависимости и запустить бэкенд
 
 ```bash
 uv sync
 uv run python run.py
 ```
 
-The API is available on `http://127.0.0.1:18001`; OpenAPI schema at
+API будет доступен по адресу `http://127.0.0.1:18001`; OpenAPI-схема —
 `http://127.0.0.1:18001/schema/openapi.json`.
 
-### 4. Install deps and start the frontend
+### 4. Установить зависимости и запустить фронтенд
 
 ```bash
 cd frontend
@@ -81,24 +82,25 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:13000`. Vite proxies `/api`, `/ws`, and `/files` to the
-backend, so you never need to configure the backend URL in the UI.
+Откройте `http://localhost:13000`. Vite проксирует `/api`, `/ws` и `/files` на
+бэкенд, так что прописывать URL бэкенда в UI не нужно.
 
-### 5. Add a connection in the UI
+### 5. Добавить подключение через UI
 
-1. Click the connection status button (top right) → **Add Connection**.
-2. Fill in host / port / database / user / password.
-3. Click **Test Connection** to verify, then **Save**.
-4. In the connection list, open the menu (⋮) on your connection and click
-   **Set Active**. The table browser populates and you can ask questions.
+1. Нажмите на кнопку статуса подключения (правый верхний угол) → **Add Connection**.
+2. Заполните host / port / database / user / password.
+3. Нажмите **Test Connection** для проверки, затем **Save**.
+4. В списке подключений откройте меню (⋮) у нужного подключения и выберите
+   **Set Active**. Браузер схемы заполнится — можно задавать вопросы.
 
-The first question against a connection triggers a background scan that
-embeds each table's name, description, and columns into the `notes_<id>` table
-— subsequent questions use those embeddings to pick relevant tables.
+Первый вопрос к подключению запускает фоновое сканирование, которое
+эмбеддит имя, описание и колонки каждой таблицы в таблицу `notes_<id>` —
+последующие вопросы используют эти эмбеддинги, чтобы выбирать релевантные
+таблицы.
 
-## LLM provider setup
+## Настройка LLM-провайдеров
 
-Set `LLM_PROVIDER` and `MODEL_ID`, plus the provider-specific keys:
+Задайте `LLM_PROVIDER`, `MODEL_ID` и ключи конкретного провайдера:
 
 ```env
 # OpenAI
@@ -111,6 +113,11 @@ LLM_PROVIDER=anthropic
 MODEL_ID=claude-sonnet-4-5
 ANTHROPIC_API_KEY=sk-ant-...
 
+# Google (Gemini)
+LLM_PROVIDER=google
+MODEL_ID=gemini-2.5-flash
+GOOGLE_API_KEY=...
+
 # Oracle Cloud (OCI Generative AI)
 LLM_PROVIDER=oci
 MODEL_ID=cohere.command-r-plus
@@ -119,25 +126,25 @@ SERVICE_ENDPOINT=https://inference.generativeai.us-chicago-1.oci.oraclecloud.com
 AUTH_FILE_LOCATION=~/.oci/config
 AUTH_PROFILE=DEFAULT
 
-# Ollama (local)
+# Ollama (локально)
 LLM_PROVIDER=ollama
 MODEL_ID=llama3
 OLLAMA_BASE_URL=http://localhost:11434
 ```
 
-## Development
+## Разработка
 
 ```bash
-# Backend
-uv run pytest                 # run tests
-uv run ruff check . --fix     # lint
-uv run ruff format .          # format
-uv run pyright                # type check
+# Бэкенд
+uv run pytest                 # запустить тесты
+uv run ruff check . --fix     # линтер
+uv run ruff format .          # форматирование
+uv run pyright                # проверка типов
 
-# Frontend
+# Фронтенд
 cd frontend
-npm run test                  # vitest (watch)
-npm run test:run              # vitest (single run)
+npm run test                  # vitest (watch-режим)
+npm run test:run              # vitest (один прогон)
 npm run type-check            # tsc --noEmit
 npm run lint                  # eslint
 ```
@@ -146,63 +153,66 @@ npm run lint                  # eslint
 
 ```bash
 make build
-make up        # start backend in prod mode on :18001
-make dev       # start with live reload
+make up        # запустить бэкенд в prod-режиме на :18001
+make dev       # запустить с live reload
 make logs
 make down
 ```
 
-`docker-compose.yml` only starts the backend. Run the frontend separately with
-`npm run dev`, or build a static bundle (`npm run build`) and serve it behind
-any reverse proxy that forwards `/api`, `/ws`, and `/files` to the backend.
+`docker-compose.yml` поднимает только бэкенд. Фронтенд запускается отдельно
+через `npm run dev`, либо собирается статикой (`npm run build`) и
+раздаётся через любой reverse proxy, проксирующий `/api`, `/ws` и `/files`
+на бэкенд.
 
-## How it works
+## Как это работает
 
 ```
-User question
+Вопрос пользователя
       ↓
-MessageService (cached per connection in app.state)
+MessageService (кэшируется по подключению в app.state)
       ↓
-Agent decides tool:
-  - generate_sql_query  → vector search → LLM filter → SQL create → controller → execute
-  - show_table          → same, but formats results as a downloadable CSV
-  - follow_up           → reuses previously retrieved tables, rewrites last SQL
+Агент выбирает инструмент:
+  - generate_sql_query  → векторный поиск → фильтр LLM → создание SQL
+                          → контроллер → выполнение
+  - show_table          → то же самое, но результат выгружается как CSV
+  - follow_up           → переиспользует ранее найденные таблицы,
+                          переписывает предыдущий SQL
       ↓
-Natural-language answer + SQL + CSV download link
+Ответ на естественном языке + SQL + ссылка на CSV
 ```
 
-The backend caches the initialized agent pipeline (LLM client, DB engine,
-vector store, table descriptions, controller) per active connection id. The
-first request for a given connection pays the initialization cost; subsequent
-requests reuse it.
+Бэкенд кэширует инициализированный конвейер агента (LLM-клиент, движок БД,
+векторное хранилище, описания таблиц, контроллер) по идентификатору активного
+подключения. Первый запрос к подключению несёт стоимость инициализации;
+последующие запросы переиспользуют её.
 
-## Safety notes
+## Замечания по безопасности
 
-- `/api/sql` and `/api/messages` run queries with your active connection's
-  credentials. Create a **read-only** PostgreSQL role for Text2SQL and grant it
-  only the SELECT privileges it needs. The built-in denylist blocks common
-  write statements but is not a substitute for database-level permissions.
-- The app currently has **no authentication**. Bind it to `127.0.0.1` or put it
-  behind an authenticated reverse proxy before exposing it beyond localhost.
-- Saved connection credentials live in `data/connections.enc`, encrypted with
-  the Fernet key from `CREDENTIAL_ENCRYPTION_KEY`. Losing the key means
-  losing the stored credentials.
+- `/api/sql` и `/api/messages` выполняют запросы под учётными данными активного
+  подключения. Создайте отдельную **read-only** роль PostgreSQL для Text2SQL и
+  выдайте ей только нужные привилегии SELECT. Встроенный denylist блокирует
+  основные пишущие конструкции, но не заменяет права на уровне СУБД.
+- В приложении сейчас **нет аутентификации**. Привязывайте его к `127.0.0.1`
+  или ставьте за reverse proxy с авторизацией, прежде чем выставлять наружу.
+- Сохранённые credentials подключений лежат в `data/connections.enc`,
+  зашифрованные ключом Fernet из `CREDENTIAL_ENCRYPTION_KEY`. Потеря ключа
+  означает потерю сохранённых данных.
 
-## Project layout
+## Структура проекта
 
 ```
 src/
-├── api/            # Litestar route handlers (messages, sql, schema, websocket, health, mock)
-├── agents/         # Agent orchestrator and LangGraph tools
+├── api/            # Обработчики маршрутов Litestar (messages, sql, schema, websocket, health, mock)
+├── agents/         # Оркестратор агента и инструменты LangGraph
 │   └── tools/      # generate_sql_query / show_table / follow_up + SQL creator, controller, executor
-├── common/         # Settings, DTOs, exceptions, error handler, logger, credential storage
-├── llm/            # Provider factory + implementations (OCI, OpenAI, Anthropic, Ollama)
-└── services/       # Connection, scanner, scheduler, embedding services
+├── common/         # Настройки, DTO, исключения, обработчик ошибок, логгер, хранилище credentials
+├── llm/            # Фабрика провайдеров и реализации (OCI, OpenAI, Anthropic, Google, Ollama)
+└── services/       # Сервисы подключений, сканера, планировщика, эмбеддингов
 
 frontend/src/
-├── components/     # UI components (chat, connection, schema, ui primitives, ErrorBoundary)
+├── components/     # UI-компоненты (чат, подключения, схема, базовые ui-примитивы, ErrorBoundary)
 ├── hooks/          # useChat, useConnection, useSchema, useWebSocket
-├── services/       # axios API client
-├── store/          # Zustand stores (chat, connection, schema, notification)
+├── services/       # axios API-клиент
+├── store/          # Zustand-стораджи (chat, connection, schema, notification)
 └── utils/          # cn, download, csv
 ```
